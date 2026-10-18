@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="de">
+<meta charset="utf-8">
+<title>Zupfnoter Desktop POC</title>
+<style>body{font:16px system-ui;max-width:680px;margin:3rem auto;padding:1rem}textarea{width:100%;height:100px}button{padding:.7rem}pre{white-space:pre-wrap;background:#eee;padding:1rem;min-height:8rem}</style>
+<h1>Zupfnoter Desktop – Prototyp</h1>
+<p id="status">Bereit</p>
+<button id="start">Codex starten</button>
+<a href="https://zupfnoter.de" target="_blank" rel="noopener">Zupfnoter öffnen</a>
+<p><textarea id="prompt">Wie transponiere ich eine Melodie von C-Dur nach G-Dur?</textarea></p>
+<button id="send">Frage senden</button>
+<pre id="output"></pre>
+<script>
+const token=new URL(location.href).searchParams.get("token");
+if(token)history.replaceState({}, "", location.pathname);
+const headers={"X-Assistant-Token":token,"Content-Type":"application/json"};
+const status=document.querySelector("#status"),output=document.querySelector("#output");
+async function api(path,body){const r=await fetch(path,{method:body?"POST":"GET",headers,body:body?JSON.stringify(body):undefined});if(!r.ok)throw Error(await r.text());return r.json()}
+document.querySelector("#start").onclick=async()=>{try{await api("/api/start",{});status.textContent="Codex gestartet"}catch(e){status.textContent=String(e)}};
+document.querySelector("#send").onclick=async()=>{output.textContent="";try{await api("/api/prompt",{text:document.querySelector("#prompt").value})}catch(e){output.textContent=String(e)}};
+async function events(){const r=await fetch("/api/events",{headers});const reader=r.body.getReader();let buffer="";while(true){const {value,done}=await reader.read();if(done)break;buffer+=new TextDecoder().decode(value);let pos;while((pos=buffer.indexOf("\n\n"))>=0){const event=buffer.slice(0,pos);buffer=buffer.slice(pos+2);const line=event.split("\n").find(x=>x.startsWith("data: "));if(!line)continue;const m=JSON.parse(line.slice(6));if(m.method==="item/agentMessage/delta")output.textContent+=m.params?.delta??"";if(m.method==="turn/completed")status.textContent="Antwort abgeschlossen";if(m.method==="bridge/error")status.textContent=m.params?.message??"Fehler";}}}
+events().catch(e=>status.textContent=String(e));
+</script>
+</html>
